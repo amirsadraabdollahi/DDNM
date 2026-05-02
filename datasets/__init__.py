@@ -187,6 +187,11 @@ def get_dataset(args, config):
                 transforms.ToTensor()])
             )
             test_dataset = dataset
+    elif config.data.dataset == 'ChannelH':
+        from datasets.channel import ChannelHDataset
+        dataset = ChannelHDataset(os.path.join(args.exp, 'datasets', args.path_y))
+        test_dataset = dataset
+
     else:
         dataset, test_dataset = None, None
 
@@ -224,4 +229,7 @@ def inverse_data_transform(config, X):
     elif config.data.rescaled:
         X = (X + 1.0) / 2.0
 
+    # Channel data stays in [-1, 1]; skip the [0, 1] image clamp.
+    if getattr(config.data, 'channel_data', False):
+        return X
     return torch.clamp(X, 0.0, 1.0)

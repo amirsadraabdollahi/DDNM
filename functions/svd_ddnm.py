@@ -51,8 +51,9 @@ def ddnm_diffusion(x, model, b, eta, A_funcs, y, cls_fn=None, classes=None, conf
                     et = et[:, :3]
                     et = et - (1 - at).sqrt()[0, 0, 0, 0] * cls_fn(x, t, classes)
 
-                if et.size(1) == 6:
-                    et = et[:, :3]
+                n_ch = config.data.channels if config is not None else 3
+                if et.size(1) > n_ch:
+                    et = et[:, :n_ch]
 
                 x0_t = (xt - et * (1 - at).sqrt()) / at.sqrt()
 
@@ -112,8 +113,9 @@ def ddnm_plus_diffusion(x, model, b, eta, A_funcs, y, sigma_y, cls_fn=None, clas
                     et = et[:, :3]
                     et = et - (1 - at).sqrt()[0, 0, 0, 0] * cls_fn(x, t, classes)
 
-                if et.size(1) == 6:
-                    et = et[:, :3]
+                n_ch = config.data.channels if config is not None else 3
+                if et.size(1) > n_ch:
+                    et = et[:, :n_ch]
 
                 # Eq. 12
                 x0_t = (xt - et * (1 - at).sqrt()) / at.sqrt()

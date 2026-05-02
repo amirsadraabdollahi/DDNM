@@ -1,0 +1,49 @@
+data:
+    dataset: "ChannelH"
+    image_size: 64
+    channels: 2
+    channel_data: true          # disables image-specific rescaling and [0,1] clamp
+    d_min: -0.39529544          # original data minimum (used for denormalization)
+    d_max: 0.38173273           # original data maximum (used for denormalization)
+    logit_transform: false
+    uniform_dequantization: false
+    gaussian_dequantization: false
+    random_flip: false
+    rescaled: false             # data is already in [-1, 1]; do NOT apply 2x-1 transform
+    num_workers: 4
+
+model:
+    type: "openai"
+    model_path: "exp/logs/channel/model.pt"   # path to your pretrained state dict
+    image_size: 64
+    in_channels: 2
+    num_channels: 128
+    num_res_blocks: 3
+    attention_resolutions: "16,8"
+    num_heads: 4
+    num_head_channels: -1
+    num_heads_upsample: -1
+    use_scale_shift_norm: true
+    dropout: 0.0
+    class_cond: false
+    use_checkpoint: false
+    learn_sigma: false
+    use_fp16: false
+    resblock_updown: false
+    use_new_attention_order: false
+    channel_mult: ""
+    var_type: fixedsmall
+
+diffusion:
+    beta_schedule: linear
+    beta_start: 0.0001
+    beta_end: 0.02
+    num_diffusion_timesteps: 1000
+
+sampling:
+    batch_size: 1
+
+time_travel:
+    T_sampling: 100
+    travel_length: 1
+    travel_repeat: 1

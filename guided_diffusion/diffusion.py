@@ -144,7 +144,10 @@ class Diffusion(object):
             model = create_model(**config_dict)
             if self.config.model.use_fp16:
                 model.convert_to_fp16()
-            if self.config.model.class_cond:
+            if hasattr(self.config.model, 'model_path'):
+                # User-supplied checkpoint (e.g. custom pretrained model)
+                ckpt = self.config.model.model_path
+            elif self.config.model.class_cond:
                 ckpt = os.path.join(self.args.exp, 'logs/imagenet/%dx%d_diffusion.pt' % (
                 self.config.data.image_size, self.config.data.image_size))
                 if not os.path.exists(ckpt):
@@ -294,6 +297,8 @@ class Diffusion(object):
         args.sigma_y = 2 * args.sigma_y #to account for scaling to [-1,1]
         sigma_y = args.sigma_y
         
+        is_channel = getattr(config.data, 'channel_data', False)
+
         print(f'Start from {args.subset_start}')
         idx_init = args.subset_start
         idx_so_far = args.subset_start
@@ -312,14 +317,24 @@ class Diffusion(object):
 
             os.makedirs(os.path.join(self.args.image_folder, "Apy"), exist_ok=True)
             for i in range(len(Apy)):
-                tvu.save_image(
-                    inverse_data_transform(config, Apy[i]),
-                    os.path.join(self.args.image_folder, f"Apy/Apy_{idx_so_far + i}.png")
-                )
-                tvu.save_image(
-                    inverse_data_transform(config, x_orig[i]),
-                    os.path.join(self.args.image_folder, f"Apy/orig_{idx_so_far + i}.png")
-                )
+                if is_channel:
+                    np.save(
+                        os.path.join(self.args.image_folder, f"Apy/Apy_{idx_so_far + i}.npy"),
+                        inverse_data_transform(config, Apy[i]).cpu().numpy()
+                    )
+                    np.save(
+                        os.path.join(self.args.image_folder, f"Apy/orig_{idx_so_far + i}.npy"),
+                        inverse_data_transform(config, x_orig[i]).cpu().numpy()
+                    )
+                else:
+                    tvu.save_image(
+                        inverse_data_transform(config, Apy[i]),
+                        os.path.join(self.args.image_folder, f"Apy/Apy_{idx_so_far + i}.png")
+                    )
+                    tvu.save_image(
+                        inverse_data_transform(config, x_orig[i]),
+                        os.path.join(self.args.image_folder, f"Apy/orig_{idx_so_far + i}.png")
+                    )
                 
             # init x_T
             x = torch.randn(
@@ -358,8 +373,8 @@ class Diffusion(object):
 
                         et = model(xt, t)
 
-                        if et.size(1) == 6:
-                            et = et[:, :3]
+                        if et.size(1) > config.data.channels:
+                            et = et[:, :config.data.channels]
 
                         # Eq. 12
                         x0_t = (xt - et * (1 - at).sqrt()) / at.sqrt()
@@ -395,23 +410,41 @@ class Diffusion(object):
                         xs.append(xt_next.to('cpu'))
 
                 x = xs[-1]
-                
+
             x = [inverse_data_transform(config, xi) for xi in x]
 
-            tvu.save_image(
-                x[0], os.path.join(self.args.image_folder, f"{idx_so_far + j}_{0}.png")
-            )
-            orig = inverse_data_transform(config, x_orig[0])
-            mse = torch.mean((x[0].to(self.device) - orig) ** 2)
-            psnr = 10 * torch.log10(1 / mse)
-            avg_psnr += psnr
+            if is_channel:
+                # Denormalize from [-1, 1] back to original physical range
+                d_min = getattr(config.data, 'd_min', -1.0)
+                d_max = getattr(config.data, 'd_max', 1.0)
+                x_denorm = (x[0] + 1.0) / 2.0 * (d_max - d_min) + d_min
+                np.save(
+                    os.path.join(self.args.image_folder, f"{idx_so_far}_0.npy"),
+                    x_denorm.cpu().numpy()
+                )
+                orig = x_orig[0]  # in [-1, 1]
+                nmse = torch.mean((x[0].to(self.device) - orig) ** 2) / (torch.mean(orig ** 2) + 1e-8)
+                avg_psnr += 10 * torch.log10(nmse + 1e-10)
+            else:
+                tvu.save_image(
+                    x[0], os.path.join(self.args.image_folder, f"{idx_so_far + j}_{0}.png")
+                )
+                orig = inverse_data_transform(config, x_orig[0])
+                mse = torch.mean((x[0].to(self.device) - orig) ** 2)
+                avg_psnr += 10 * torch.log10(1 / mse)
 
             idx_so_far += y.shape[0]
 
-            pbar.set_description("PSNR: %.2f" % (avg_psnr / (idx_so_far - idx_init)))
+            if is_channel:
+                pbar.set_description("NMSE: %.2f dB" % (avg_psnr / (idx_so_far - idx_init)))
+            else:
+                pbar.set_description("PSNR: %.2f" % (avg_psnr / (idx_so_far - idx_init)))
 
         avg_psnr = avg_psnr / (idx_so_far - idx_init)
-        print("Total Average PSNR: %.2f" % avg_psnr)
+        if is_channel:
+            print("Total Average NMSE: %.2f dB" % avg_psnr)
+        else:
+            print("Total Average PSNR: %.2f" % avg_psnr)
         print("Number of samples: %d" % (idx_so_far - idx_init))
         
         
