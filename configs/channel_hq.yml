@@ -27,7 +27,7 @@ model:
     dropout: 0.0
     class_cond: false
     use_checkpoint: false
-    learn_sigma: false
+    learn_sigma: true
     use_fp16: false
     resblock_updown: false
     use_new_attention_order: false
