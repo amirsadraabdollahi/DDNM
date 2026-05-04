@@ -10,7 +10,7 @@ data:
     gaussian_dequantization: false
     random_flip: false
     rescaled: false             # data is already in [-1, 1]; do NOT apply 2x-1 transform
-    num_workers: 4
+    num_workers: 0
 
 model:
     type: "openai"
