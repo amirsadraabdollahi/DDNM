@@ -303,6 +303,7 @@ class Diffusion(object):
         idx_init = args.subset_start
         idx_so_far = args.subset_start
         avg_psnr = 0.0
+        avg_cos_sim = 0.0
         pbar = tqdm.tqdm(val_loader)
         for x_orig, classes in pbar:
             x_orig = x_orig.to(self.device)
@@ -423,8 +424,14 @@ class Diffusion(object):
                     x_denorm.cpu().numpy()
                 )
                 orig = x_orig[0]  # in [-1, 1]
-                nmse = torch.mean((x[0].to(self.device) - orig) ** 2) / (torch.mean(orig ** 2) + 1e-8)
+                pred = x[0].to(self.device)
+
+                nmse = torch.mean((pred - orig) ** 2) / (torch.mean(orig ** 2) + 1e-8)
                 avg_psnr += 10 * torch.log10(nmse + 1e-10)
+
+                dot = torch.sum(pred * orig)
+                cos_sim = dot / (torch.norm(pred) * torch.norm(orig) + 1e-8)
+                avg_cos_sim += cos_sim
             else:
                 tvu.save_image(
                     x[0], os.path.join(self.args.image_folder, f"{idx_so_far + j}_{0}.png")
@@ -436,13 +443,20 @@ class Diffusion(object):
             idx_so_far += y.shape[0]
 
             if is_channel:
-                pbar.set_description("NMSE: %.2f dB" % (avg_psnr / (idx_so_far - idx_init)))
+                pbar.set_description(
+                    "NMSE: %.2f dB | CosSim: %.4f" % (
+                        avg_psnr / (idx_so_far - idx_init),
+                        avg_cos_sim / (idx_so_far - idx_init),
+                    )
+                )
             else:
                 pbar.set_description("PSNR: %.2f" % (avg_psnr / (idx_so_far - idx_init)))
 
-        avg_psnr = avg_psnr / (idx_so_far - idx_init)
+        avg_psnr   = avg_psnr   / (idx_so_far - idx_init)
+        avg_cos_sim = avg_cos_sim / (idx_so_far - idx_init)
         if is_channel:
-            print("Total Average NMSE: %.2f dB" % avg_psnr)
+            print("Total Average NMSE:    %.2f dB" % avg_psnr)
+            print("Total Average CosSim:  %.4f"    % avg_cos_sim)
         else:
             print("Total Average PSNR: %.2f" % avg_psnr)
         print("Number of samples: %d" % (idx_so_far - idx_init))
