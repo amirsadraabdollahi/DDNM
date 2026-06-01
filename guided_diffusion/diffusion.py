@@ -425,7 +425,7 @@ class Diffusion(object):
                 )
                 # Denormalize ground truth to original physical range for metrics
                 orig_denorm = (x_orig[0] + 1.0) / 2.0 * (d_max - d_min) + d_min
-                pred_denorm = x_denorm  # already computed above
+                pred_denorm = x_denorm.to(self.device)  # already computed above
 
                 nmse = torch.mean((pred_denorm - orig_denorm) ** 2) / (torch.mean(orig_denorm ** 2) + 1e-8)
                 avg_psnr += 10 * torch.log10(nmse + 1e-10)
