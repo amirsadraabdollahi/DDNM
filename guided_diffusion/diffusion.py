@@ -423,14 +423,19 @@ class Diffusion(object):
                     os.path.join(self.args.image_folder, f"{idx_so_far}_0.npy"),
                     x_denorm.cpu().numpy()
                 )
-                orig = x_orig[0]  # in [-1, 1]
-                pred = x[0].to(self.device)
+                # Denormalize ground truth to original physical range for metrics
+                orig_denorm = (x_orig[0] + 1.0) / 2.0 * (d_max - d_min) + d_min
+                pred_denorm = x_denorm  # already computed above
 
-                nmse = torch.mean((pred - orig) ** 2) / (torch.mean(orig ** 2) + 1e-8)
+                nmse = torch.mean((pred_denorm - orig_denorm) ** 2) / (torch.mean(orig_denorm ** 2) + 1e-8)
                 avg_psnr += 10 * torch.log10(nmse + 1e-10)
 
-                dot = torch.sum(pred * orig)
-                cos_sim = dot / (torch.norm(pred) * torch.norm(orig) + 1e-8)
+                # Complex cosine similarity in original domain
+                # conj(pred) * orig in complex = (r_p - j*i_p)(r_o + j*i_o)
+                dot_real = torch.sum(pred_denorm[0] * orig_denorm[0] + pred_denorm[1] * orig_denorm[1])
+                dot_imag = torch.sum(pred_denorm[0] * orig_denorm[1] - pred_denorm[1] * orig_denorm[0])
+                dot_abs  = torch.sqrt(dot_real ** 2 + dot_imag ** 2)
+                cos_sim  = dot_abs / (torch.norm(pred_denorm) * torch.norm(orig_denorm) + 1e-8)
                 avg_cos_sim += cos_sim
             else:
                 tvu.save_image(
