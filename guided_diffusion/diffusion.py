@@ -7,6 +7,9 @@ import numpy as np
 import tqdm
 import torch
 import torch.utils.data as data
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 from datasets import get_dataset, data_transform, inverse_data_transform
 from functions.ckpt_util import get_ckpt_path, download
@@ -19,6 +22,46 @@ from guided_diffusion.script_util import create_model, create_classifier, classi
 import random
 
 from scipy.linalg import orth
+
+
+def save_channel_heatmaps(gt, masked, estimated, save_path):
+    """
+    Save a 2×3 heatmap figure comparing ground truth, masked input, and
+    DDNM estimate for a complex channel matrix.
+
+    Args:
+        gt, masked, estimated: numpy arrays of shape (2, H, W)
+                               channel 0 = real part, channel 1 = imaginary part
+        save_path: output .png path
+    """
+    fig, axes = plt.subplots(2, 3, figsize=(13, 8))
+
+    col_titles = ['Ground Truth', 'Masked Input', 'Estimated']
+    row_titles = ['Real Part', 'Imaginary Part']
+    data = [gt, masked, estimated]
+
+    for row in range(2):
+        # Use symmetric range from the ground truth for all columns so that
+        # the three panels are directly comparable.
+        vmax = np.abs(gt[row]).max()
+        vmin = -vmax
+
+        for col, (title, d) in enumerate(zip(col_titles, data)):
+            im = axes[row, col].imshow(
+                d[row], cmap='RdBu_r', vmin=vmin, vmax=vmax,
+                aspect='auto', interpolation='nearest'
+            )
+            axes[row, col].set_title(f'{title}', fontsize=11)
+            axes[row, col].set_xlabel('Receiver index')
+            axes[row, col].set_ylabel('Transmitter index')
+            plt.colorbar(im, ax=axes[row, col], fraction=0.046, pad=0.04)
+
+        axes[row, 0].set_ylabel(f'{row_titles[row]}\nTransmitter index')
+
+    plt.suptitle('Channel H Matrix — Restoration Comparison', fontsize=13, y=1.01)
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
 
 
 def get_gaussian_noisy_img(img, noise_level):
@@ -425,6 +468,14 @@ class Diffusion(object):
                 )
                 # Denormalize ground truth to original physical range for metrics
                 orig_denorm = (x_orig[0] + 1.0) / 2.0 * (d_max - d_min) + d_min
+                # Denormalize masked input for heatmap
+                apy_denorm = (Apy[0] + 1.0) / 2.0 * (d_max - d_min) + d_min
+                save_channel_heatmaps(
+                    gt=orig_denorm.cpu().numpy(),
+                    masked=apy_denorm.cpu().numpy(),
+                    estimated=x_denorm.cpu().numpy(),
+                    save_path=os.path.join(self.args.image_folder, f"{idx_so_far}_heatmap.png")
+                )
                 pred_denorm = x_denorm.to(self.device)  # already computed above
 
                 nmse = torch.mean((pred_denorm - orig_denorm) ** 2) / (torch.mean(orig_denorm ** 2) + 1e-8)
