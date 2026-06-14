@@ -1,13 +1,10 @@
 import os
-import logging
-import time
-import glob
 
+import matplotlib
 import numpy as np
-import tqdm
 import torch
 import torch.utils.data as data
-import matplotlib
+import tqdm
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
