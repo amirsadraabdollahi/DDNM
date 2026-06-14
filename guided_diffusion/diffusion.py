@@ -328,12 +328,12 @@ class Diffusion(object):
             A = torch.nn.AdaptiveAvgPool2d((256//scale,256//scale))
             Ap = lambda z: MeanUpsample(z,scale)
         elif args.deg =='inpainting':
-            loaded = np.load("exp/inp_masks/mask.npy")
+            loaded = np.load(args.mask_path)
             mask = torch.from_numpy(loaded).to(self.device)
             A = lambda z: z*mask
             Ap = A
         elif args.deg =='mask_color_sr':
-            loaded = np.load("exp/inp_masks/mask.npy")
+            loaded = np.load(args.mask_path)
             mask = torch.from_numpy(loaded).to(self.device)
             A1 = lambda z: z*mask
             A1p = A1
@@ -349,7 +349,7 @@ class Diffusion(object):
             Ap = lambda z: A1p(A2p(A3p(z)))
         elif args.deg =='diy':
             # design your own degradation
-            loaded = np.load("exp/inp_masks/mask.npy")
+            loaded = np.load(args.mask_path)
             mask = torch.from_numpy(loaded).to(self.device)
             A1 = lambda z: z*mask
             A1p = A1
@@ -605,7 +605,7 @@ class Diffusion(object):
             A_funcs = CS(config.data.channels, self.config.data.image_size, cs_ratio, self.device)
         elif deg == 'inpainting':
             from functions.svd_operators import Inpainting
-            loaded = np.load("exp/inp_masks/mask.npy")
+            loaded = np.load(args.mask_path)
             mask = torch.from_numpy(loaded).to(self.device).reshape(-1)
             missing_r = torch.nonzero(mask == 0).long().reshape(-1) * 3
             missing_g = missing_r + 1

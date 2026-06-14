@@ -84,8 +84,12 @@ def parse_args_and_config():
         "--add_noise",
         action="store_true"
     )
-
-    
+    parser.add_argument(
+        "--mask_path",
+        type=str,
+        default="exp/inp_masks/mask.npy",
+        help="Path to the binary inpainting mask .npy file (used when --deg inpainting)",
+    )
 
     args = parser.parse_args()
 
