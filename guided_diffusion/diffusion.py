@@ -64,6 +64,35 @@ def save_channel_heatmaps(gt, masked, estimated, save_path):
     plt.close()
 
 
+def save_metric_dotplot(nmse_list, cos_sim_list, save_path):
+    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+
+    for ax, values, title, ylabel, fmt in zip(
+        axes,
+        [nmse_list, cos_sim_list],
+        ['NMSE per Sample', 'Cosine Similarity per Sample'],
+        ['NMSE (dB)', 'Cosine Similarity'],
+        ['%.1f', '%.3f'],
+    ):
+        arr = np.array(values)
+        xs  = np.arange(len(arr))
+
+        ax.scatter(xs, arr, s=18, alpha=0.7, zorder=3, label='samples')
+        ax.axhline(arr.mean(), color='tab:red',    linewidth=1.5, linestyle='--', label=f'mean={arr.mean():{fmt[1:]}}')
+        ax.axhline(arr.mean() + arr.std(), color='tab:orange', linewidth=1.0, linestyle=':',  label=f'±1 std={arr.std():{fmt[1:]}}')
+        ax.axhline(arr.mean() - arr.std(), color='tab:orange', linewidth=1.0, linestyle=':')
+
+        ax.set_title(title, fontsize=11)
+        ax.set_xlabel('Sample index')
+        ax.set_ylabel(ylabel)
+        ax.legend(fontsize=8)
+        ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
+
+
 def get_gaussian_noisy_img(img, noise_level):
     return img + torch.randn_like(img).cuda() * noise_level
 
@@ -347,6 +376,8 @@ class Diffusion(object):
         idx_so_far = args.subset_start
         avg_psnr = 0.0
         avg_cos_sim = 0.0
+        nmse_list = []
+        cos_sim_list = []
         pbar = tqdm.tqdm(val_loader)
         for x_orig, classes in pbar:
             x_orig = x_orig.to(self.device)
@@ -479,7 +510,9 @@ class Diffusion(object):
                 pred_denorm = x_denorm.to(self.device)  # already computed above
 
                 nmse = torch.mean((pred_denorm - orig_denorm) ** 2) / (torch.mean(orig_denorm ** 2) + 1e-8)
-                avg_psnr += 10 * torch.log10(nmse + 1e-10)
+                nmse_db = 10 * torch.log10(nmse + 1e-10)
+                avg_psnr += nmse_db
+                nmse_list.append(nmse_db.item())
 
                 # Complex cosine similarity in original domain
                 # conj(pred) * orig in complex = (r_p - j*i_p)(r_o + j*i_o)
@@ -488,6 +521,7 @@ class Diffusion(object):
                 dot_abs  = torch.sqrt(dot_real ** 2 + dot_imag ** 2)
                 cos_sim  = dot_abs / (torch.norm(pred_denorm) * torch.norm(orig_denorm) + 1e-8)
                 avg_cos_sim += cos_sim
+                cos_sim_list.append(cos_sim.item())
             else:
                 tvu.save_image(
                     x[0], os.path.join(self.args.image_folder, f"{idx_so_far + j}_{0}.png")
@@ -508,11 +542,17 @@ class Diffusion(object):
             else:
                 pbar.set_description("PSNR: %.2f" % (avg_psnr / (idx_so_far - idx_init)))
 
-        avg_psnr   = avg_psnr   / (idx_so_far - idx_init)
+        avg_psnr    = avg_psnr    / (idx_so_far - idx_init)
         avg_cos_sim = avg_cos_sim / (idx_so_far - idx_init)
         if is_channel:
-            print("Total Average NMSE:    %.2f dB" % avg_psnr)
-            print("Total Average CosSim:  %.4f"    % avg_cos_sim)
+            nmse_arr   = np.array(nmse_list)
+            cos_arr    = np.array(cos_sim_list)
+            print("Total Average NMSE:      %.2f dB  (std: %.2f dB)" % (nmse_arr.mean(), nmse_arr.std()))
+            print("Total Average CosSim:    %.4f     (std: %.4f)"    % (cos_arr.mean(),  cos_arr.std()))
+            save_metric_dotplot(
+                nmse_list, cos_sim_list,
+                save_path=os.path.join(self.args.image_folder, "metrics_dotplot.png")
+            )
         else:
             print("Total Average PSNR: %.2f" % avg_psnr)
         print("Number of samples: %d" % (idx_so_far - idx_init))
