@@ -548,6 +548,17 @@ class Diffusion(object):
             cos_arr = np.array(cos_sim_list)
             print("Total Average NMSE:      %.2f dB  (std: %.2f dB)" % (nmse_arr.mean(), nmse_arr.std()))
             print("Total Average CosSim:    %.4f     (std: %.4f)" % (cos_arr.mean(), cos_arr.std()))
+            # Empirical distributional analysis (exact percentiles over all samples)
+            n_tot = len(nmse_arr)
+            print("--- Distributional analysis (N=%d) ---" % n_tot)
+            for thr in (-17.0, -18.0, -18.5, -19.0):
+                print("  NMSE below %5.1f dB : %5.1f%% of cases"
+                      % (thr, 100.0 * (nmse_arr < thr).mean()))
+            for thr in (0.990, 0.992, 0.993, 0.994):
+                print("  CosSim above %.3f  : %5.1f%% of cases"
+                      % (thr, 100.0 * (cos_arr > thr).mean()))
+            np.save(os.path.join(self.args.image_folder, "nmse_per_sample.npy"), nmse_arr)
+            np.save(os.path.join(self.args.image_folder, "cos_sim_per_sample.npy"), cos_arr)
             save_metric_dotplot(
                 nmse_list, cos_sim_list,
                 save_path=os.path.join(self.args.image_folder, "metrics_dotplot.png")
