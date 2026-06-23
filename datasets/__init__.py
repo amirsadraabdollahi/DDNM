@@ -192,6 +192,18 @@ def get_dataset(args, config):
         dataset = ChannelHDataset(os.path.join(args.exp, 'datasets', args.path_y))
         test_dataset = dataset
 
+    elif config.data.dataset == 'ChannelDenoise':
+        from datasets.channel import ChannelDenoiseDataset
+        dataset = ChannelDenoiseDataset(
+            clean_root=os.path.join(args.exp, 'datasets', config.data.clean_path),
+            noisy_root=os.path.join(args.exp, 'datasets', args.path_y),  # reuse --path_y for noisy dir
+            c_min=config.data.d_min, c_max=config.data.d_max,
+            n_min=getattr(config.data, 'n_min', None),
+            n_max=getattr(config.data, 'n_max', None),
+            prenorm=getattr(config.data, 'inputs_prenormalized', False),
+        )
+        test_dataset = dataset
+
     else:
         dataset, test_dataset = None, None
 

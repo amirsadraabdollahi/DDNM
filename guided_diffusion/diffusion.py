@@ -366,10 +366,15 @@ class Diffusion(object):
         else:
             raise NotImplementedError("degradation type not supported")
 
-        args.sigma_y = 2 * args.sigma_y  # to account for scaling to [-1,1]
-        sigma_y = args.sigma_y
-
         is_channel = getattr(config.data, 'channel_data', False)
+
+        if is_channel:
+            # Channel data: sigma_y is already expressed in the [-1,1] clean-normalized
+            # scale (see configs/channel_denoise.yml). Do NOT apply the image-only 2x.
+            sigma_y = getattr(config.data, 'sigma_y', args.sigma_y)
+        else:
+            args.sigma_y = 2 * args.sigma_y  # to account for scaling to [-1,1]
+            sigma_y = args.sigma_y
 
         print(f'Start from {args.subset_start}')
         idx_init = args.subset_start
@@ -378,12 +383,18 @@ class Diffusion(object):
         avg_cos_sim = 0.0
         nmse_list = []
         cos_sim_list = []
+        paired = (config.data.dataset == 'ChannelDenoise')
         pbar = tqdm.tqdm(val_loader)
-        for x_orig, classes in pbar:
-            x_orig = x_orig.to(self.device)
+        for batch in pbar:
+            x_orig = batch[0].to(self.device)
             x_orig = data_transform(self.config, x_orig)
 
-            y = A(x_orig)
+            if paired:
+                # Use the REAL noisy measurement as y (already mapped into the
+                # model's clean-normalized space by ChannelDenoiseDataset).
+                y = data_transform(self.config, batch[1].to(self.device))
+            else:
+                y = A(x_orig)
 
             if config.sampling.batch_size != 1:
                 raise ValueError("please change the config file to set batch size as 1")
