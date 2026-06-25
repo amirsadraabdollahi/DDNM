@@ -9,7 +9,7 @@ data:
     n_max:  4.62419653
     inputs_prenormalized: false # samples are RAW physical values
     clean_path: "channel_denoise/clean"   # ground-truth dir under exp/datasets/
-    sigma_y: 0.05               # noise level in the [-1,1] clean scale; set via scripts/estimate_sigma.py
+    sigma_y: 0.5               # noise level in the [-1,1] clean scale; set via scripts/estimate_sigma.py
     logit_transform: false
     uniform_dequantization: false
     gaussian_dequantization: false
