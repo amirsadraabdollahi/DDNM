@@ -134,6 +134,18 @@ def get_beta_schedule(beta_schedule, *, beta_start, beta_end, num_diffusion_time
         betas = np.linspace(
             beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64
         )
+    elif beta_schedule == "cosine":
+        # Matches improved-diffusion's get_named_beta_schedule("cosine"):
+        # discretize alpha_bar(t) = cos((t/T + 0.008)/1.008 * pi/2)^2.
+        # Use this when the checkpoint was trained with --noise_schedule cosine.
+        max_beta = 0.999
+        alpha_bar = lambda u: np.cos((u + 0.008) / 1.008 * np.pi / 2) ** 2
+        betas = []
+        for i in range(num_diffusion_timesteps):
+            t1 = i / num_diffusion_timesteps
+            t2 = (i + 1) / num_diffusion_timesteps
+            betas.append(min(1 - alpha_bar(t2) / alpha_bar(t1), max_beta))
+        betas = np.array(betas, dtype=np.float64)
     elif beta_schedule == "const":
         betas = beta_end * np.ones(num_diffusion_timesteps, dtype=np.float64)
     elif beta_schedule == "jsd":
@@ -371,6 +383,9 @@ class Diffusion(object):
         if is_channel:
             # Channel data: sigma_y is already expressed in the [-1,1] clean-normalized
             # scale (see configs/channel_denoise.yml). Do NOT apply the image-only 2x.
+            # This is the DEFAULT/fallback; for paired ChannelDenoise data it is
+            # overridden per-sample inside the loop (each sample carries its own
+            # noise level, so a fixed sigma_y won't over-denoise high-SNR samples).
             sigma_y = getattr(config.data, 'sigma_y', args.sigma_y)
         else:
             args.sigma_y = 2 * args.sigma_y  # to account for scaling to [-1,1]
@@ -393,6 +408,11 @@ class Diffusion(object):
                 # Use the REAL noisy measurement as y (already mapped into the
                 # model's clean-normalized space by ChannelDenoiseDataset).
                 y = data_transform(self.config, batch[1].to(self.device))
+                # Per-sample noise level (normalized scale) carried by the dataset;
+                # overrides the global config sigma_y so each sample is denoised to
+                # its own SNR. batch == (clean, noisy, sigma_y, label) here.
+                if len(batch) > 3:
+                    sigma_y = float(batch[2].view(-1)[0])
             else:
                 y = A(x_orig)
 

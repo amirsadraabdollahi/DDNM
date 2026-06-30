@@ -121,8 +121,16 @@ class ChannelDenoiseDataset(Dataset):
             clean_model = self._norm_clean(clean)
         noisy_model = self._noisy_to_model(noisy)
 
+        # Per-sample noise level in the model's [-1, 1] normalized scale, i.e.
+        # the RMS of (noisy - clean) over all real/imag elements. This equals the
+        # global value from scripts/estimate_sigma.py but computed for THIS sample,
+        # so DDNM can denoise each sample to its own SNR instead of a fixed sigma_y.
+        residual = noisy_model.astype(np.float64) - clean_model.astype(np.float64)
+        sigma_y = float(np.sqrt(np.mean(residual ** 2)))
+
         return (
             torch.from_numpy(clean_model.astype(np.float32)),
             torch.from_numpy(noisy_model.astype(np.float32)),
+            sigma_y,
             0,
         )

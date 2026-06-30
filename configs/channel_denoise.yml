@@ -3,13 +3,13 @@ data:
     image_size: 64
     channels: 2
     channel_data: true          # disables image-specific rescaling and [0,1] clamp
-    d_min: -3.19540334          # CLEAN stats = model training space (used for denorm + metrics)
-    d_max:  3.15650487
+    d_min: -3.03529787          # CLEAN stats = model training space (used for denorm + metrics)
+    d_max:  3.23488426
     n_min: -4.97337484          # noisy stats — informational only (raw inputs)
     n_max:  4.62419653
     inputs_prenormalized: false # samples are RAW physical values
     clean_path: "channel_denoise/clean"   # ground-truth dir under exp/datasets/
-    sigma_y: 0.5               # noise level in the [-1,1] clean scale; set via scripts/estimate_sigma.py
+    sigma_y: 0.102112          # noise level in the [-1,1] clean scale; set via scripts/estimate_sigma.py (true measured value)
     logit_transform: false
     uniform_dequantization: false
     gaussian_dequantization: false
@@ -40,7 +40,7 @@ model:
     var_type: fixedsmall
 
 diffusion:
-    beta_schedule: linear
+    beta_schedule: cosine       # MUST match training (--noise_schedule cosine); checkpoint is a cosine model
     beta_start: 0.0001
     beta_end: 0.02
     num_diffusion_timesteps: 1000
